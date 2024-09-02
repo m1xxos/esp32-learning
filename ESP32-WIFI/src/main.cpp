@@ -2,18 +2,30 @@
 #include <WiFiMulti.h>
 #include <WebServer.h>
 #include <config.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 
-WebServer server(80); // Создаем сервер на порту 80
+#define SCREEN_WIDTH 128 
+#define SCREEN_HEIGHT 64 
+#define OLED_RESET -1
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
-const int ledPin = 16; // Измените это значение в зависимости от вашего подключения
 
-// Флаг для отслеживания состояния светодиода
+WebServer server(80); 
+
+const int ledPin = 16; 
+
 bool ledState = false;
 
-// Функция для обработки корневого пути "/"
+
 void handleRoot() {
-    String html = "<html><body><h1>ESP32 LED Control</h1>";
+    String html = "<html><body><h1>ESP32 LED and Display Control</h1>";
     html += "<button onclick=\"toggleLED()\">Toggle LED</button>";
+    html += "<form action=\"/submit\" method=\"get\">";
+    html += "<input type=\"text\" name=\"text\" placeholder=\"Enter text\">";
+    html += "<input type=\"submit\" value=\"Submit\">";
+    html += "</form>";
     html += "<script>";
     html += "function toggleLED() {";
     html += "var xhttp = new XMLHttpRequest();";
@@ -25,14 +37,32 @@ void handleRoot() {
     server.send(200, "text/html", html);
 }
 
-// Функция для обработки пути "/toggle"
+
 void handleToggle() {
-    ledState = !ledState;  // Меняем состояние светодиода на противоположное
-    digitalWrite(ledPin, ledState ? HIGH : LOW);  // Устанавливаем состояние светодиода
+    ledState = !ledState;  
+    digitalWrite(ledPin, ledState ? HIGH : LOW);  
     server.send(200, "text/plain", ledState ? "LED is ON" : "LED is OFF");
 }
 
-// Обработчик для ошибки 404 - страница не найдена
+void handleSubmit() {
+    if (server.hasArg("text")) {
+        String text = server.arg("text");  // Получаем текст из формы
+        Serial.println("Received text: " + text);
+
+        // Отображаем текст на дисплее
+        display.clearDisplay();
+        display.setTextSize(1);  // Размер текста
+        display.setTextColor(SSD1306_WHITE);
+        display.setCursor(0, 0); // Позиция курсора
+        display.println(text);
+        display.display();
+
+        server.send(200, "text/html", "<html><body><h1>Text Displayed!</h1><a href=\"/\">Back</a></body></html>");
+    } else {
+        server.send(400, "text/plain", "No text received");
+    }
+}
+
 void handleNotFound() {
     server.send(404, "text/plain", "404: Not found");
 }
@@ -45,6 +75,12 @@ void setup() {
   pinMode(ledPin, OUTPUT);
   digitalWrite(ledPin, LOW);
 
+  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+        Serial.println(F("SSD1306 allocation failed"));
+        for(;;);  // Остановка в случае ошибки
+    }
+    display.display();
+
 
   wifiMulti.addAP(WIFI_SSID, WIFI_PASSWORD);
 
@@ -55,12 +91,13 @@ void setup() {
   Serial.println("Connected");
   Serial.println(WiFi.localIP());
 
-  // Определяем обработчики
+  
   server.on("/", handleRoot);
   server.on("/toggle", handleToggle);
+  server.on("/submit", handleSubmit);
   server.onNotFound(handleNotFound);
 
-  // Запускаем сервер
+  
   server.begin();
   Serial.println("HTTP server started");
   
