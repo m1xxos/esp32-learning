@@ -1,8 +1,19 @@
 #include <Arduino.h>
 #include <WiFiMulti.h>
+#include <WebServer.h>
+#include <config.h>
 
-#define WIFI_SSID "ESP-Guest"
-#define WIFI_PASSWORD "123456789"
+WebServer server(80); // Создаем сервер на порту 80
+
+// Обработчик для главной страницы
+void handleRoot() {
+    server.send(200, "text/html", "<h1>Welcome to ESP32 Web Server!</h1>");
+}
+
+// Обработчик для ошибки 404 - страница не найдена
+void handleNotFound() {
+    server.send(404, "text/plain", "404: Not found");
+}
 
 WiFiMulti wifiMulti;
 
@@ -16,11 +27,20 @@ void setup() {
   {
     delay(1000);
   }
-
   Serial.println("Connected");
+  Serial.println(WiFi.localIP());
+
+  // Определяем обработчики
+  server.on("/", handleRoot);
+  server.onNotFound(handleNotFound);
+
+  // Запускаем сервер
+  server.begin();
+  Serial.println("HTTP server started");
   
 }
 
 void loop() {
   digitalWrite(LED_BUILTIN, WiFi.status() == WL_CONNECTED);
+  server.handleClient();
 }
